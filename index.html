@@ -33,13 +33,13 @@ class Account
 	#transactions;
 	
 	constructor(params) {
-		name = params.name;
-		creationTimestamp = params.creationTimestamp;
-		#intentAccounts = params.intentAccounts;
-		#locationAccounts = params.locationAccounts;
-		#liabilityAccounts = params.liabilityAccounts;
-		#nonCapitalAccounts = params.nonCapitalAccounts;
-		#transactions = params.transactions;
+		this.name = params.name;
+		this.creationTimestamp = params.creationTimestamp;
+		this.#intentAccounts = params.intentAccounts;
+		this.#locationAccounts = params.locationAccounts;
+		this.#liabilityAccounts = params.liabilityAccounts;
+		this.#nonCapitalAccounts = params.nonCapitalAccounts;
+		this.#transactions = params.transactions;
 	}
 	
 	get lastTransaction() {
@@ -248,6 +248,12 @@ class Transaction
 }
 
 
+function loadSubAccounts(table)
+{
+	
+}
+
+
 grist.ready({requiredAccess: "full"});
 
 
@@ -261,7 +267,7 @@ function onAddBobClicked(event)
 function main()
 {
 	// document.getElementById("foo").innerText = 
-	grist.getTable().create(["foo", "bar", 7]);
+	console.info(JSON.stringify(grist.getTable("Intents")));
 }
 
 window.addEventListener("DOMContentLoaded", main);
