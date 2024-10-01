@@ -1,0 +1,273 @@
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<title>Bob Adder</title>
+		<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+	</head>
+	<body>
+		
+	<script>
+
+
+function sum(arr, init = 0) {
+	return arr.reduce((acc, next) => acc + next, init);
+}
+
+function last(arr) {
+	return arr.at(-1);
+}
+
+function totalAccountsBalance(accounts) {
+	return sum(accounts.map(x => x.balance));
+}
+
+class Account
+{
+	name;
+	creationTimestamp;
+	
+	#intentAccounts;
+	#locationAccounts;
+	#liabilityAccounts;
+	#nonCapitalAccounts;
+	#transactions;
+	
+	constructor(params) {
+		name = params.name;
+		creationTimestamp = params.creationTimestamp;
+		#intentAccounts = params.intentAccounts;
+		#locationAccounts = params.locationAccounts;
+		#liabilityAccounts = params.liabilityAccounts;
+		#nonCapitalAccounts = params.nonCapitalAccounts;
+		#transactions = params.transactions;
+	}
+	
+	get lastTransaction() {
+		return last(#transactions);
+	}
+	
+	transactionAt(timestamp) {
+		return #transactions.find(x => x.timestamp > timestamp)?.previous;
+	}
+	
+	snapshotAt(transaction) {
+		return new AccountPostInitalSnapshot(this, transaction);
+	}
+	
+	get initialSnapshot() {
+		return new AccountInitialSnapshot(this);
+	}
+	
+	get currentSnapshot() {
+		return lastTransaction ? snapshotAt(lastTransaction) ?? initialSnapshot;
+	}
+	
+	snapshotAtTimestamp(timestamp) {
+		if (timestamp < creationTimestamp)
+			return initialSnapshot;
+		if (timestamp > lastTransaction.timestamp)
+			return currentSnapshot;
+		let transaction = transactionAt(timestamp);
+		if (transaction)
+			return snapshotAt(transaction);
+		return null;
+	}
+}
+
+class SubAccount
+{
+	name;
+	initialBalance;
+}
+
+
+abstract class AccountSnapshot
+{
+	account;
+	nextTransaction;
+	abstract get lastTransaction();
+	abstract get timestamp();
+	
+	abstract get intentAccountSnapshots();
+	abstract get locationAccountSnapshots();
+	abstract get nonCapitalAccountSnapshots();
+	abstract get liabilityAccountSnapshots();
+	
+	get netWorth() {
+		return assetsBalance - liabilitiesBalance;
+	}
+	
+	get assetsBalance() {
+		return nonCapitalBalance + capitalBalance;
+	}
+	
+	get liabilitiesBalance() {
+		return totalAccountsBalance(liabilityAccountSnapshots);
+	}
+	
+	get nonCapitalBalance() {
+		return totalAccountsBalance(nonCapitalAccountSnapshots);
+	}
+	
+	get capitalBalance() {
+		return totalAccountsBalance(intentAccountSnapshots);
+	}
+}
+
+class AccountInitialSnapshot extends AccountSnapshot
+{
+	constructor(account) {
+		this.account = account;
+		this.nextTransaction = null;
+	}
+
+	get timestamp() {
+		return account.timestamp;
+	}
+
+	get lastTransaction() {
+		return null;
+	}
+	
+	get intentAccountSnapshots() {
+		return account.intentAccounts.map(x => new SubAccountInitialSnapshot(x));
+	}
+	
+	get locationAccountSnapshots() {
+		return account.locationAccounts.map(x => new SubAccountInitialSnapshot(x));
+	}
+	
+	get nonCapitalAccountSnapshots() {
+		return account.nonCapitalAccounts.map(x => new SubAccountInitialSnapshot(x));
+	}
+	
+	get liabilityAccountSnapshots() {
+		return account.liabilityAccounts.map(x => new SubAccountInitialSnapshot(x));
+	}
+}
+
+class AccountPostInitalSnapshot extends AccountSnapshot
+{
+	#lastTransactionValue;
+
+	constructor(account, lastTransaction) {
+		this.account = account;
+		this.lastTransactionValue = lastTransaction;
+		this.nextTransaction = null;
+	}
+
+	get lastTransaction() {
+		return #lastTransactionValue;
+	}
+	
+	get intentAccountSnapshots() {
+		return account.intentAccounts.map(x => new SubAccountPostInitialSnapshot(x, lastTransaction));
+	}
+	
+	get locationAccountSnapshots() {
+		return account.locationAccounts.map(x => new SubAccountPostInitialSnapshot(x, lastTransaction));
+	}
+	
+	get nonCapitalAccountSnapshots() {
+		return account.nonCapitalAccounts.map(x => new SubAccountPostInitialSnapshot(x, lastTransaction));
+	}
+	
+	get liabilityAccountSnapshots() {
+		return account.liabilityAccounts.map(x => new SubAccountPostInitialSnapshot(x, lastTransaction));
+	}
+}
+
+abstract class SubAccountSnapshot
+{
+	subAccount;
+	abstract get balance();
+}
+
+class SubAccountInitialSnapshot extends SubAccountSnapshot
+{
+	constructor(subAccount) {
+		this.subAccount = subAccount;
+	}
+
+	get balance() {
+		return subAccount.initialBalance;
+	}
+}
+
+class SubAccountPostInitialSnapshot extends SubAccountSnapshot
+{
+	transaction;
+
+	constructor(subAccount, transaction) {
+		this.subAccount = subAccount;
+		this.transaction = transaction;
+	}
+
+	get balance() {
+		return transaction.newBalanceOf(subAccount);
+	}
+}
+
+class SubAccountBalanceChange
+{
+	subAccount;
+	amount;
+}
+
+class Transaction
+{
+	timestamp;
+	description;
+	changes;
+	previous;
+	next;
+
+	get amount() {
+		return sum(changes.map(x => x.amount));
+	}
+	
+	get sourceChanges() {
+		return changes.filter(x => x.amount < 0);
+	}
+	
+	get targetChanges() {
+		return changes.filter(x => x.amount > 0);
+	}
+	
+	previousBalanceOf(subAccount) {
+		previous?.newBalanceOf(subAccount) ?? subAccount.initialBalance;
+	}
+	
+	deltaBalanceOf(subAccount) {
+		changes.find(x => x == subAccount)?.amount ?? 0.00;
+	}
+	
+	newBalanceOf(subAccount) {
+		previousBalanceOf(subAccount) + deltaBalanceOf(subAccount);
+	}
+}
+
+
+grist.ready({requiredAccess: "full"});
+
+
+function onAddBobClicked(event)
+{
+	alert("Adding a Bob!");
+	grist.docApi.applyUserActions([["AddRecord", "Table1", null, {Name: "Bob", Fav_Number: 7, Is_Cool: true}]]);
+}
+
+
+function main()
+{
+	// document.getElementById("foo").innerText = 
+	grist.getTable().create(["foo", "bar", 7]);
+}
+
+window.addEventListener("DOMContentLoaded", main);
+	</script>
+
+	<button id="add-bob-btn">Add Bob</button>
+
+	</body>
+</html>
